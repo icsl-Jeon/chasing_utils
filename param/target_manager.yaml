@@ -1,0 +1,18 @@
+world_frame_id: map
+observation:
+  interval: 0.2 # timer callback interval to gather target observation (tf lookup)
+  queue_size: 20 # max size of observation used for prediction
+  queue_min: 3 # min number of observation for prediction
+prediction:
+  collision_margin: 0.5 # [m]. reject candidate prediction having distance value less than this
+  weight_shape_change: 0.5 # [m]. importance weight on the shape change from previous prediction, over minimizing observation error
+  tol: # tolerance to determine the need of new prediction.
+    accum_error: 10.0 # [m x s] accumulated prediction error
+    age: 1.0 # [s] prediction expires after this duration,
+    risk: 0.5 # [m] if min dist from current prediction to obstacle is lower than this, risk and need update
+
+
+
+
+
+

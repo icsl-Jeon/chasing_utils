@@ -1,0 +1,36 @@
+is_load_mode: false
+verbose: true
+horizon: 2.0
+method: discrete_integrator # {discrete_integrator or skeleton_permutation}
+lib_folder: "" # in load mode, this will be loaded and in write mode, lib will be written here
+traverse_grid:
+  resolution: 0.2
+  padding: 0.2
+offline:
+  save: true
+  dx: 0.2 # inspection stride on forward [m]
+  dy: 0.2 # inspection stride on lateral direction (only used in skeleton permutation) [m]
+
+discrete_integrator: # used only method is this
+  speed: # initial speed
+    n_disc: 20
+    min: 0.1
+    max: 1.5
+  accel:
+    x:
+      n_disc: 10
+      min: 0.0
+      max: 0.2
+    y:
+      n_disc: 7
+      min: -0.4
+      max: 0.4
+
+visualization:
+  draw_start_time: 0.0 # better to set negative to select prediction library
+  ref_traj: {r: 0.0, g: 1.0, b: 1.0, a: 0.3, w: 0.03} # Will be available at skeleton permutation
+  candid_traj: {r: 0.0, g: 1.0, b: 1.0, a: 1.0, w: 0.01, dN: 10}
+  feasible_traj: {r: 0.0, g: 1.0, b: 1.0, a: 1.0, w: 0.01, dN: 10}
+  traverse_grid:
+    association: {r: 1.0, g: 1.0, b: 1.0, a: 0.3}
+    non_association: {r: 0.0, g: 0.0, b: 0.0, a: 0.3}
