@@ -5,8 +5,13 @@
 #include <chasing_utils/TargetManager.h>
 
 namespace chasing_utils{
-
-    Point PredictionOutput::eval(ros::Time evalTime) {
+    /**
+     *
+     * @param evalTime
+     * @return
+     * @bug if evalTime is beyond the time horizon, just will evalute the final point
+     */
+    Point PredictionOutput::eval(ros::Time evalTime) const {
         double tEval = (evalTime - refTime).toSec();
         return predictionTraj.eval(tEval);
     }
@@ -250,6 +255,7 @@ namespace chasing_utils{
     }
 
     bool TargetManager::predict(vector<PredictionOutput> &predictionOutputSet) {
+        predictionOutputSet.clear();
 
         // checking whether all targets received observation from tf lookup
         bool isAllPredictable = true;
@@ -340,11 +346,38 @@ namespace chasing_utils{
             state.predictionAccumErrors[n] = 0.0;
             state.tLastPrediction = predictionStartTime;
             targets[n].isPredicted = true;
+
+            predictionOutputSet.push_back(targets[n].curPrediction);
+
         }
         double elapse = timer.stop();
         ROS_INFO("TargetManager: prediction took %f ms totally", elapse );
         mutex_.unlock();
         return true;
+    }
+    /**
+     * Return target poses by looking-up tf when this function is called.
+     * @return if no tf, just return the last pose at queue
+     */
+    vector<Pose> TargetManager::lookupCurrentTargets() const {
+        vector<Pose> poseSet(param.nTarget);
+
+        for (int n = 0 ; n < param.nTarget ; n++) {
+            tf::StampedTransform stampedTransform;
+            stampedTransform.setIdentity();
+            try {
+                // setting ros::Time::now for looking up cannot retrieve enough information in the buffer for this case
+                tfListener->lookupTransform(param.worldFrameId, param.targetObservationFrameId[n],
+                                            ros::Time(0), stampedTransform);
+                poseSet[n] = Pose(stampedTransform);
+            } catch (tf::TransformException &ex) {
+                ROS_WARN("TargetManager: %s not found. will return just last pose from timer callback",
+                         param.targetObservationFrameId[n].c_str());
+                poseSet[n] = targets[n].curPose;
+//                ROS_INFO_STREAM(ex.what());
+            }
+        }
+        return poseSet;
     }
 
     /**

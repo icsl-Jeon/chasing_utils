@@ -329,7 +329,7 @@ namespace chasing_utils {
      * @param l
      * @return
      */
-    float LineSegment::distTo(LineSegment l){
+    float LineSegment::distTo(LineSegment l) const {
         float SMALL_NUM = 1e-4;
         Point u = p2 - p1;
         Point v = l.p2 - l.p1;
@@ -430,6 +430,18 @@ namespace chasing_utils {
             sampledPnts.points.push_back(p2);
         return sampledPnts;
     }
+
+    /**
+     * Sample points along line
+     * @param nPoints 1 = p1 / 2 = (p1,p2) / ....
+     * @return
+     */
+    PointSet LineSegment::samplePoints(unsigned int nPoints) const {
+        float ds = (p2 - p1).norm() / (nPoints + 1);
+        return samplePoints(ds,true);
+    }
+
+
 
 
 
@@ -621,6 +633,12 @@ namespace chasing_utils {
     }
 
 
+    double polyEval(const double* polyCoeff,int order,double x){
+        double result = polyCoeff[order];
+        for (int i = order - 1 ; i >=0 ; i--)
+            result = (x*result + polyCoeff[i]);
+        return result;
+    }
 
 
     double B(uint n, uint d) {
@@ -837,6 +855,86 @@ namespace chasing_utils {
             return PolynomialDivOutput(q,r);
         }
     }
+
+    /**
+     * @brief Number of real root in [start,end]. Inaccurate when multiple order drop of sturm sequence
+     * @param start
+     * @param end
+     * @return
+     */
+    size_t Polynomial::nRoot2(double start, double end) const {
+        uint n = getOrder();
+
+        // Check the non zero of leading coeffi
+        while (abs(polyCoeff[n]) < 1e-8 ) {
+//        printf("[Polynomial consturction] the leading coeffi = 0\n");
+            n--;
+        }
+
+        if ( n == 0){ // just constant polynomial
+            if (abs(polyCoeff[0]) < 1e-8){ // zero constant
+                cerr << "zero constant polynomial. Number of zeros is inf" << endl;
+                return 100;
+            }
+            else // non zero constant
+                return 0;
+        }
+        else if (n == 1){
+            double root = -polyCoeff[0]/polyCoeff[1];
+            if (root >= start and root <= end)
+                return 1;
+            else
+                return 0;
+        }else{
+            // do nothing
+        }
+
+        double f0[n+1],f1[n],f2[n-1]; // maximum size
+
+        // Read
+        for (int i = 0 ; i<=n-1 ; i++) {
+            f0[i] = coeff(i);
+            f1[i] = coeff(i+1)*(i+1);
+        }
+        f0[n] = coeff(n);
+
+        uint sDiff1 = ((polyEval(f0,n,start)*polyEval(f1,n-1,start))<0) ;
+        uint sDiff2 = ((polyEval(f0,n,end)*polyEval(f1,n-1,end))<0);
+
+        // Calculating Sturm sequence
+        double q1,q0,q2;
+        for (int i = 2 ; i<=n;i++){
+            // deg of each fun
+            uint n0 = n-i+2,n1 = n0-1,n2 = n0-2;
+
+            // quotient
+            q1 = f0[n0]/f1[n1],q0 = 1/f1[n1]*(f0[n0-1]-f1[n1-1]*f0[n0]/f1[n1]);
+            q2 = f0[n0-2]-f1[n1-1]*q0;
+            if (abs(q2) <  1e-10){
+//            cout << "Multiple decrease of order is not handled. "<<endl;
+                return 1;
+            }
+
+
+            // 1. calculate f2 and sign change
+            f2[0] = f1[0]*q0-f0[0];
+            for (int j = 1 ; j<= n2 ; j++)
+                f2[j] = f1[j-1]*q1+f1[j]*q0-f0[j];
+
+            sDiff1 += (polyEval(f2,n2,start)*polyEval(f1,n1,start)<0);
+            sDiff2 += (polyEval(f2,n2,end)*polyEval(f1,n1,end)<0);
+
+            // 2. update
+            for (int j = 0; j<=n2;j++) {
+                f0[j] = f1[j];
+                f1[j] = f2[j];
+            }
+            f0[n1] = f1[n1];
+        }
+        return abs(int(sDiff1 - sDiff2));
+    }
+
+
 
     Polynomial Polynomial::derviative() const {
         if(getOrder()>=0){
@@ -1444,8 +1542,6 @@ namespace chasing_utils {
         }
         return scaleMat(T).block(0,0,order+1,order+1)*Q*scaleMat(T).block(0,0,order+1,order+1)/pow(T,2*d-1);
     }
-
-
 }
 
 
@@ -1565,4 +1661,107 @@ visualization_msgs::Marker chasing_utils::getClearingMarker(string worldFrame, s
 }
 
 
-/// Calculate average orientation using quaternions
+/**
+ * @brief get the marker array from t0 to tf
+ * @param t0
+ * @param tf
+ * @param frame_id
+ * @return
+ */
+visualization_msgs::MarkerArray chasing_utils::EllipsoidObstacle::getMarkerTrace(double t0, double tf, string frame_id,int& nsId,
+                                                         double rValue,double gValue,double bValue,double aValue,double scale) {
+    visualization_msgs::MarkerArray markerArray;
+
+    visualization_msgs::Marker markerBase;
+//    markerBase.ns = to_string(nsId);
+
+    markerBase.action = visualization_msgs::Marker::ADD;
+    markerBase.header.stamp = ros::Time::now();
+    markerBase.header.frame_id = frame_id;
+    markerBase.type = visualization_msgs::Marker::SPHERE;
+    markerBase.scale.x = 2*scale*u(0);
+    markerBase.scale.y = 2*scale*u(1);
+    markerBase.scale.z = 2*scale*u(2);
+    markerBase.color.r = rValue;
+    markerBase.color.g = gValue;
+    markerBase.color.b = bValue;
+    markerBase.color.a = aValue;
+
+    Quaternionf q(R.poseMat.rotation().matrix());
+    markerBase.pose.orientation.x = q.x();
+    markerBase.pose.orientation.y = q.y();
+    markerBase.pose.orientation.z = q.z();
+    markerBase.pose.orientation.w = q.w();
+    int  N  = 10 ;
+    VectorXf ts= VectorXf::LinSpaced(N,t0,tf);
+    for (int n = 0 ; n < N ; n++){
+        if (n > 0 )
+            markerBase.color.a = aValue*0.5;
+//        markerBase.id = n;
+        double t = ts(n)-tLastUpdate;
+        markerBase.pose.position.x = r.px.eval(t);
+        markerBase.pose.position.y = r.py.eval(t);
+        markerBase.pose.position.z = r.pz.eval(t);
+        markerBase.id = nsId++;
+        markerArray.markers.push_back(markerBase);
+    }
+
+    return markerArray;
+}
+
+
+
+int chasing_utils::sign(float x){
+    return int(x > 0) - int(x < 0);
+}
+
+float chasing_utils::bearingAngle(PointSet targets,Point observer){
+    // simple
+    int M = targets.size();
+    float angMax = -std::numeric_limits<float>::max();
+    for (int m1 = 0 ; m1 < M ; m1++){
+        for (int m2 = m1 + 1 ; m2 < M ; m2 ++ ){
+            float l1 = targets.points[m1].distTo(observer);
+            float l2 = targets.points[m2].distTo(observer);
+            float l = targets.points[m1].distTo(targets.points[m2]);
+            float ang = abs(acos((pow(l1,2)+pow(l2,2)-pow(l,2))/(2*l1*l2)));
+            angMax = max (angMax, ang);
+        }
+    }
+    return angMax;
+}
+
+bool chasing_utils::collisionRay(octomap_server::EdtOctomapServer *edf_ptr,
+                                 Point pnt1, Point pnt2, float stride, float eps) {
+
+    float length = pnt1.distTo(pnt2);
+    Point dir = (pnt2 - pnt1);
+    Point pnt;
+    int N = ceil(length / stride);
+    if (N != 0) {
+        for (int n = 0; n <= N; n++) {
+            pnt = pnt1 + dir * (n / float(N)) ;
+            float dist = edf_ptr->getDistance(octomap::point3d(pnt.x, pnt.y, pnt.z));
+            if (dist == -1) {
+                printf("unknown point [%f, %f, %f] ? \n ", pnt.x, pnt.y, pnt.z);
+            }
+            if ((dist != -1) and dist <= eps) {
+
+//            printf("point [%f, %f, %f] : collision with distance = %f \n ",pnt(0),pnt(1),pnt(2),dist);
+                return true;
+            }
+        }
+        return false;
+    } else {
+        pnt = pnt1;
+        float dist = edf_ptr->getDistance(octomap::point3d(pnt.x, pnt.y, pnt.z));
+        if (dist == -1) {
+            printf("unknown point [%f, %f, %f] ? \n ", pnt.x, pnt.y, pnt.z);
+        }
+        if ((dist != -1) and dist <= eps) {
+//            printf("point [%f, %f, %f] : collision with distance = %f \n ",pnt(0),pnt(1),pnt(2),dist);
+            return true;
+        }
+        return false;
+    }
+}

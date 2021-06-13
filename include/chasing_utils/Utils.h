@@ -127,7 +127,6 @@ namespace chasing_utils {
 
     };
 
-
     // Point
     struct Point {
         float x;
@@ -215,6 +214,11 @@ namespace chasing_utils {
 
             rot.setValue(e1.x(),e2.x(),e3.x(),e1.y(),e2.y(),e3.y(),e1.z(),e2.z(),e3.z());
             return rot;
+        }
+
+        float angleTo(Point pnt){
+            float dot = pnt.x*x + pnt.y*y + pnt.z*z;
+            return abs(dot/pnt.norm()/norm());
         }
 
     };
@@ -442,9 +446,10 @@ namespace chasing_utils {
         Point p2;
         LineSegment() = default;
         LineSegment(Point p0_,Point p1_):p1(p0_),p2(p1_){};
-        float distTo(LineSegment l);
+        float distTo(LineSegment l) const ;
         float length() const {return p1.distTo(p2);};
         PointSet samplePoints(float ds,bool includeEnds = false) const;
+        PointSet samplePoints(unsigned int nPoints) const;
 
     };
 
@@ -482,9 +487,22 @@ namespace chasing_utils {
         int getSize() const {return points.size();}
         float diff(const Traj& traj,float weightMinMaxRatio = 1); //! traj difference with the other
         float diff(const PolynomialXYZ& poly, float weightMinMaxRatio = 1); //! traj difference with the other
-
     };
 
+
+
+    struct TrajStamped{
+    public:
+        Traj traj; // ts here is local time (e.g. start from zero)
+        ros::Time refTime;
+        TrajStamped() = default;;
+        TrajStamped(ros::Time refTime, Traj traj):
+                refTime(refTime),traj(traj) {};
+        Point eval(ros::Time evalTime) const {
+            double tEval = (evalTime - refTime).toSec();
+            return traj.eval(tEval);
+        };
+    };
 
 
 
@@ -560,12 +578,10 @@ namespace chasing_utils {
         vector<gridTrajPair> getGridTrajPairSet() const {return gridTrajPairSet;}
         vector<trajGridPair> getTrajGridPairSet() const {return trajGridPairSet;}
 
-
-
     };
 
 
-
+    /**
     class ScoreGridBase{
     private:
         GridParam gridParam;
@@ -628,7 +644,7 @@ namespace chasing_utils {
         ~VisibilityScoreGrid(){ cout << "Destructing vsf ... " << endl;  };
         void report();
     };
-
+    **/
 
 
     /**
@@ -680,6 +696,9 @@ namespace chasing_utils {
 
     double B(uint n,uint d);
 
+
+    double polyEval(const double* polyCoeff,int order,double x);
+
     class Polynomial{
     private:
         double* polyCoeff;/**< coeff[i] = p_i ( i = 0,..,N)*/
@@ -722,6 +741,7 @@ namespace chasing_utils {
         Polynomial& operator-=(double c);
 
         PolynomialDivOutput div(const Polynomial& rhs) const;
+        size_t nRoot2(double start,double end) const;
 
         Polynomial derviative() const;
         double integration(double x1, double x2) const;
@@ -729,7 +749,6 @@ namespace chasing_utils {
         double eval(double x,uint dOrder) const;
         ~Polynomial();
     };
-
 
     struct PolynomialDivOutput{
         Polynomial q; // quotient
@@ -769,6 +788,65 @@ namespace chasing_utils {
     };
 
 
+    /**
+     * @brief compute the polynomial d = (p-c)'A(p-c) where p,c is polynomial and A is PD sym matrix
+     * @param outPoly
+     * @param px
+     * @param py
+     * @param pz
+     * @param c
+     * @param A
+     */
+    inline void computeRiemannianDistance2(Polynomial &outPoly, const PolynomialXYZ &pxyz,
+                                           const PolynomialXYZ &c,
+                                           const Matrix3d &A) {
+        // We will assume deg(x) >= deg(c) and the outPoly = 0
+
+        uint orderSet[3]; // order of p-c per dimension
+        uint orderSetP[3]; // order of p
+        uint orderMax = 0;
+        for (uint i = 0 ; i < 3 ; i++) {
+            orderSetP[i] = pxyz.getOrder(i);
+            orderSet[i] = max(pxyz.getOrder(i),c.getOrder(i));
+            if (orderMax < orderSet[i])
+                orderMax = orderSet[i];
+        }
+
+        // construct p-c
+        double* pc[3];
+        for (uint i =0 ; i < 3 ; i++) {
+            pc[i] = new double[orderSet[i]+1];
+            for (uint j = 0 ; j <= orderSetP[i] ; j++) // fill p
+                pc[i][j] = pxyz.coeff(i,j);
+            for (uint j = 0 ; j <= c.getOrder(i) ; j++) // fill -c
+                pc[i][j] -= c.coeff(i,j);
+        }
+
+        double d[2*orderMax+1]; // d = (p-c)'A(p-c)
+        for (uint i = 0 ; i <= 2*orderMax ; i++)
+            d[i] = 0;
+
+        // 1. Diagonal terms
+        for (uint i = 0 ; i < 3 ; i++) { // per dim
+            for (uint j = 0; j <= orderSet[i]; j++)
+                d[2 * j] += A(i, i) * pow(pc[i][j], 2);
+            for (uint j = 0; j <= orderSet[i]; j++)
+                for (uint k = j +1 ; k<=orderSet[i];k++)
+                    d[j+k] += 2*A(i, i) * pc[i][j]*pc[i][k];
+
+        }
+        // 2. Off diagonal terms
+        for (uint i = 0 ; i < 3 ; i++) // per dim
+            for (uint j = i+1 ; j < 3;j++)
+                if (A(i,j)!=0)
+                    for (uint n1 = 0 ; n1 <= orderSet[i] ; n1++) // per order
+                        for (uint n2 = 0 ; n2 <= orderSet[j] ; n2++)
+                            d[n1+n2]+=2*A(i,j)*pc[i][n1]*pc[j][n2];
+
+        outPoly.copyData(d,2*orderMax);
+    }
+
+
     struct Permutator
     {
     public:
@@ -800,6 +878,81 @@ namespace chasing_utils {
 
     nav_msgs::Odometry poseToOdom(const geometry_msgs::PoseStamped& poseStamped);
     visualization_msgs::Marker getClearingMarker(string worldFrame, string ns, int id);
+
+    struct ChaserState{
+        ros::Time stamp;
+        Point velocity;
+        Point position;
+        float yaw = 0.0;
+        geometry_msgs::Pose toGeoPose(){
+            chasing_utils::Pose pose;
+            pose.setTranslation(position);
+            pose.setRotation(Eigen::Quaternionf(AngleAxisf(yaw,Vector3f::UnitZ())));
+            return pose.toGeoPose();
+        }
+    };
+
+    struct EllipsoidNoRot{
+    private:
+        Eigen::Matrix3d A;
+        Eigen::Vector3d u;
+        Eigen::Vector3d c;
+
+    public:
+        EllipsoidNoRot() {A = Eigen::Matrix3d::Zero() ; u = Eigen::Vector3d::Zero() ; c = Eigen::Vector3d::Zero();}
+        EllipsoidNoRot(Eigen::Vector3d c, Eigen::Vector3d u):c(c),u(u){
+            A.setZero();
+            for (int d = 0 ; d < 3 ; d++){
+                A.coeffRef(d,d) = 1/pow(u(d),2);
+            }
+        }
+
+        double evalDist (Point pnt){
+            Eigen::Vector3d pnt_(pnt.x,pnt.y,pnt.z);
+            return max(((pnt_-c).transpose()*A*(pnt_-c)).coeff(0)-1,0.0);
+        }
+
+    };
+
+
+    /**
+     * Ellipsoidal obstacle
+     */
+    struct EllipsoidObstacle{
+    private:
+        PolynomialXYZ r; /**< trajectory of the center (time variant)*/
+        Matrix3f A; /**< A = Ru^2R' s.t (x-r)'A(x-r) = 1 */
+        Vector3f u; /**< semi-length of each principal axis */
+        Pose R; /**< Rwe or R01 */
+    public:
+        double tLastUpdate; // last filter update. eval of poly = (tEval - tLast)
+        static int obstacleIndex;
+        EllipsoidObstacle(const PolynomialXYZ& r_,const Vector3f&  u_,const Pose R_):u(u_),R(R_){
+            Matrix3f U = Matrix3f::Zero(3,3);
+            for (uint d = 0; d < DIM ; d++) {
+
+                U.coeffRef(d,d) = 1/u_(d);
+            }
+            r = PolynomialXYZ(r_.px.getOrder());
+            r.px = r_.px;
+            r.py = r_.py;
+            r.pz = r_.pz;
+            A = R.poseMat.rotation().matrix()*U*U*(R.poseMat.rotation().matrix().transpose());
+        }
+        Matrix3f getA() const {return A;};
+        PolynomialXYZ getr() const  {return r;};
+        visualization_msgs::MarkerArray  getMarkerTrace(double t0,double tf,string frame_id,int & nsId,
+                                                        double rValue = 0,double gValue = 0 , double bValue = 0,double aValue = 0.7,double scale = 1.0);
+        ~EllipsoidObstacle(){//obstacleIndex--;
+            //
+        };
+
+    };
+
+    int sign(float x);
+    float bearingAngle(PointSet targets,Point observer);
+    bool collisionRay (octomap_server::EdtOctomapServer* edf_ptr,
+                       Point pnt1, Point pnt2,float stride ,float eps = 0);
 
 }
 

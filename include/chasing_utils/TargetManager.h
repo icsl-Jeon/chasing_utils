@@ -21,11 +21,9 @@ namespace chasing_utils {
         PredictionOutput() = default;;
         PredictionOutput(ros::Time refTime, Traj predictionTraj):
             refTime(refTime), predictionTraj(predictionTraj) {};
-        Point eval(ros::Time evalTime);
+        Point eval(ros::Time evalTime) const;
         ros::Time getRefTime() const {return refTime; }
         Traj getTraj() const {return predictionTraj; }
-
-
     };
 
     struct Target {
@@ -112,6 +110,7 @@ namespace chasing_utils {
     public:
         TargetManager(octomap_server::EdtOctomapServer* edtServerPtr = NULL);
         bool predict(vector<PredictionOutput>& predictionOutputSet);
+        vector<Pose> lookupCurrentTargets() const;
         bool needPrediction();
     };
 

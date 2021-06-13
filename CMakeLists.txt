@@ -13,6 +13,9 @@ catkin_package(
         INCLUDE_DIRS include
         LIBRARIES chasing_utils
 )
+
+add_library(${PROJECT_NAME} src/Library.cpp src/Utils.cpp src/TargetManager.cpp)
+
 include_directories(
         include
         ${catkin_INCLUDE_DIRS}
