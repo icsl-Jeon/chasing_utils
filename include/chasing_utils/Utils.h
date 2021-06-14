@@ -907,7 +907,7 @@ namespace chasing_utils {
             }
         }
 
-        double evalDist (Point pnt){
+        double evalDist (Point pnt) const {
             Eigen::Vector3d pnt_(pnt.x,pnt.y,pnt.z);
             return max(((pnt_-c).transpose()*A*(pnt_-c)).coeff(0)-1,0.0);
         }

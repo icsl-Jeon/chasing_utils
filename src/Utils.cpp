@@ -284,6 +284,24 @@ namespace chasing_utils {
     }
 
 
+    Point PointSet::center() {
+        int M = points.size();
+        if (M == 0 ){
+            cout << "PointSet: number of points is zero. center has nan value." << endl;
+        }
+        float xc = 0,yc = 0, zc = 0;
+
+        for(int m = 0 ; m < M ; m++){
+            xc+=points[m].x;
+            yc+=points[m].y;
+            zc+=points[m].z;
+        }
+
+        xc/= M; yc/=M ; zc /=M;
+        return Point (xc,yc,zc);
+    }
+
+
 
     void copyPntAt(sensor_msgs::PointCloud2& pcl, int n , float x, float y, float z){
 
@@ -1730,6 +1748,9 @@ float chasing_utils::bearingAngle(PointSet targets,Point observer){
     }
     return angMax;
 }
+
+
+
 
 bool chasing_utils::collisionRay(octomap_server::EdtOctomapServer *edf_ptr,
                                  Point pnt1, Point pnt2, float stride, float eps) {

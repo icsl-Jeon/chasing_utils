@@ -110,7 +110,7 @@ namespace chasing_utils {
     public:
         TargetManager(octomap_server::EdtOctomapServer* edtServerPtr = NULL);
         bool predict(vector<PredictionOutput>& predictionOutputSet);
-        vector<Pose> lookupCurrentTargets() const;
+        vector<Pose> lookupLastTargets() const;
         bool needPrediction();
     };
 

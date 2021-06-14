@@ -359,7 +359,7 @@ namespace chasing_utils{
      * Return target poses by looking-up tf when this function is called.
      * @return if no tf, just return the last pose at queue
      */
-    vector<Pose> TargetManager::lookupCurrentTargets() const {
+    vector<Pose> TargetManager::lookupLastTargets() const {
         vector<Pose> poseSet(param.nTarget);
 
         for (int n = 0 ; n < param.nTarget ; n++) {
