@@ -1750,8 +1750,6 @@ float chasing_utils::bearingAngle(PointSet targets,Point observer){
 }
 
 
-
-
 bool chasing_utils::collisionRay(octomap_server::EdtOctomapServer *edf_ptr,
                                  Point pnt1, Point pnt2, float stride, float eps) {
 

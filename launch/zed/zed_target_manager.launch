@@ -2,13 +2,18 @@
 
     <include file="$(find zed2_client)/launch/client.launch">
         <arg name="is_bag" value="true"/>
-        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/dual_target/compressed/forest_budlegool.bag"/>
+
+<!--        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/single_target/compressed/314_upper.bag"/>-->
+
+        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/dual_target/compressed/dual_circling.bag"/>
+<!--        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/dual_target/compressed/forest_budlegool.bag"/>-->
         <arg name="run_edt" value="false"/>
         <arg name="rviz" value="false"/>
     </include>
 
     <include file="$(find chasing_utils)/launch/target_manager.launch">
         <arg name="is_bag" value="true"/>
+        <arg name="lib_name" default="target2d_3s"/>
     </include>
 
     <node pkg="rviz" type="rviz" name="rviz_zed_prediction" args="-d $(find chasing_utils)/rviz/prediction.rviz" output="log">

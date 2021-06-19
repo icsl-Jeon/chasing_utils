@@ -150,6 +150,7 @@ namespace chasing_utils{
     /**
      * Callback in a separate thread (async spinner) with defined interval (intended to run not too fast).
      * @param event
+     * @todo update observation with ros time now ? or lookup-ed time
      */
     void TargetManager::observationTimerCallback(const ros::TimerEvent &event) {
 
@@ -164,6 +165,7 @@ namespace chasing_utils{
                 // setting ros::Time::now for looking up cannot retrieve enough information in the buffer for this case
                 tfListener->lookupTransform(param.worldFrameId, param.targetObservationFrameId[n],
                                             ros::Time(0), stampedTransform);
+                stampedTransform.stamp_ = curTime;
                 updateObservation(n,(stampedTransform));
             } catch (tf::TransformException &ex) {
                 ROS_WARN("TargetManager: %s not found. We use position of the tf for prediction.",
@@ -231,12 +233,21 @@ namespace chasing_utils{
         }
     }
 
+    /**
+     * Update state of targetIdx with tf lookup result
+     * @param targetIdx
+     * @param stampedTransform
+     */
     void TargetManager::updateObservation(int targetIdx,
                                           const tf::StampedTransform&  stampedTransform) {
 
         ros::Time t = stampedTransform.stamp_;
+        double dt = (t - targets[targetIdx].tLastUpdate).toSec();
+
         Pose curPose =  Pose(stampedTransform);
         Point location = curPose.getTranslation();
+        Point velocity = (location - curPose.getTranslation()) * (1.0/dt);
+        Point accel = (velocity - targets[targetIdx].curVelocity) * (1.0/dt);
         Observation observation = make_pair(t, location);
 
         if (mutex_.try_lock()) {
@@ -245,6 +256,9 @@ namespace chasing_utils{
             targets[targetIdx].isPoseUpdate = true;
             targets[targetIdx].tLastUpdate = t;
             targets[targetIdx].curPose = curPose;
+            targets[targetIdx].curVelocity = velocity;
+            targets[targetIdx].curAccel = accel;
+
             observationQueue.push_back(observation);
             if (observationQueue.size() > param.observationQueueSize)
                 observationQueue.pop_front();
@@ -294,6 +308,15 @@ namespace chasing_utils{
             int trajBest = 0;
             float costMin = numeric_limits<float>::max();
             auto observationQueue = targets[n].observationRawQueue ;
+
+            VectorXf timeKnots(observationQueue.size());
+            int i = 0;
+            for (auto obsrv: observationQueue){
+                timeKnots[i++] = ((obsrv.first - predictionStartTime).toSec());
+            }
+
+            ROS_DEBUG_STREAM("target " << n << " : ts =" << timeKnots.transpose());
+
             int nObservation  = observationQueue.size();
             for (int trajIdx : feasibleIndex) {
                 // cost 1: observation error
@@ -379,6 +402,22 @@ namespace chasing_utils{
         }
         return poseSet;
     }
+
+
+    vector<ObjectState> TargetManager::lookupLastTargetStates() const {
+        vector<ObjectState> objectStateSet;
+        for (int m = 0; m < param.nTarget ; m++){
+            const auto & target = targets[m];
+            ObjectState objectState;
+            objectState.position = target.curPose.getTranslation();
+            objectState.velocity = target.curVelocity;
+            objectState.acceleration = target.curAccel;
+            objectState.stamp = target.tLastUpdate;
+            objectStateSet.push_back(objectState);
+        }
+        return objectStateSet;
+    }
+
 
     /**
      * Based on state, returns triggering condition

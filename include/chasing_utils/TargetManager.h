@@ -33,7 +33,10 @@ namespace chasing_utils {
         ros::Time tLastUpdate;
         deque<Observation> observationRawQueue; //! raw observations
         PredictionOutput curPrediction;
+
         Pose curPose;
+        Point curVelocity;
+        Point curAccel;
 
         lib::LibraryOnline* libraryPtr;
         int curBestPick = 0;
@@ -111,6 +114,7 @@ namespace chasing_utils {
         TargetManager(octomap_server::EdtOctomapServer* edtServerPtr = NULL);
         bool predict(vector<PredictionOutput>& predictionOutputSet);
         vector<Pose> lookupLastTargets() const;
+        vector<ObjectState> lookupLastTargetStates() const;
         bool needPrediction();
     };
 

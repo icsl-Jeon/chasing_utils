@@ -53,7 +53,7 @@
 #include <octomap/octomap.h>
 
 
-#define TABLE_CELL_WIDTH 10
+#define TABLE_CELL_WIDTH 12
 #define TABLE_TAG_WIDTH 10
 #define PRECISION 2
 
@@ -432,7 +432,7 @@ namespace chasing_utils {
 
     struct PointSet{
         vector<Point> points;
-        int size() {return points.size();};
+        int size() const {return points.size();};
         float bearingFrom(Point pnt);
         pcl::PointCloud<pcl::PointXYZ> toPCL(string frame_id);
         Point center() ;
@@ -879,9 +879,10 @@ namespace chasing_utils {
     nav_msgs::Odometry poseToOdom(const geometry_msgs::PoseStamped& poseStamped);
     visualization_msgs::Marker getClearingMarker(string worldFrame, string ns, int id);
 
-    struct ChaserState{
+    struct ObjectState{
         ros::Time stamp;
         Point velocity;
+        Point acceleration;
         Point position;
         float yaw = 0.0;
         geometry_msgs::Pose toGeoPose(){
