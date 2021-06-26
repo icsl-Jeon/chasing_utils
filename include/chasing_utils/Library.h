@@ -5,17 +5,25 @@
 #ifndef AUTO_CHASER4_LIBRARY_H
 #define AUTO_CHASER4_LIBRARY_H
 #include <chasing_utils/Utils.h>
+#include <chasing_utils/Observer.h>
 
 namespace chasing_utils {
 
     namespace lib {
-
         /**
-         * Generation model for polynomial array of library
+         * Generation model for polynomial array of library (affects generateTrajectory)
          */
         enum Strategy {
             DISCRETE_ACCEL_INTEGRATOR,
             SKELETON_PERMUTATION
+        };
+
+        /**
+         * Choice of inspection points (affects getInspectionPoints)
+         */
+        enum AssociationMethod{
+            COLLISION,
+            OCCLUSION
         };
 
         struct LibraryParam{
@@ -26,7 +34,9 @@ namespace chasing_utils {
             float horizon = 1.0;
             bool verbose = true;
             string libFolder = "";
+
             Strategy strategy = Strategy::DISCRETE_ACCEL_INTEGRATOR;
+            AssociationMethod association = AssociationMethod::COLLISION;
 
             // TraverseGrid (important)
             float TG_resolution = 0.2;
@@ -36,12 +46,11 @@ namespace chasing_utils {
 
             //! offline
             bool isLoadMode = true;
-            PolynomialXYZ* polyRefPtr; //! active in PERMUTATION STRATEGY
             //! saveLib = true, save binary file: saveFolder/myName. In load mode vice versa.
             bool saveLib = true;
 
-            // Discrete Accel Integration (DI)
-            // TODO currently only 2D is supported
+            // polygen - Discrete Accel Integration (DI)
+            // todo  currently only 2D is supported
             int DI_speedDisc = 4;
             float DI_speedMin  = 0.0;
             float DI_speedMax = 2.5;
@@ -51,6 +60,36 @@ namespace chasing_utils {
             float DI_accelYDisc = 5;
             float DI_accelYMin = -1;
             float DI_accelYMax = 1;
+
+            // polygen - Skeleton permutation (SP)
+            PolynomialXYZ* SP_polyRefPtr = NULL; //! active in PERMUTATION STRATEGY. Semantically, this is the target trajectory
+            uint SP_polyOrder = 6; // in case of SP, we shoyld explicitly determine the order of polynomials (DI = 2)
+            float SP_timeInterval = 0.3; // delta t to select OS around target trajectory
+            float SP_oscGenStartTime = 0.2; // knots will be formed [this time ~ horizon]
+            int SP_maxTimeStep = 4;
+            int SP_azimStep = 8; // sampled around 360
+            int SP_elevStep = 2;
+            int SP_radStep = 2;
+            float SP_elevMin = 30.0f / 180.0f * M_PI;
+            float SP_elevMax = 45.0f / 180.0f * M_PI;
+            float SP_radMin = 1.5;
+            float SP_radMax = 2.5;
+            float SP_weightSampleDeviation = 1.0; // weight of skeleton tracking versus smoothness of polynomials
+            // fill necessary parameters for polyset generation
+            observer::ObserverParam getObserverParam() const {
+                observer::ObserverParam paramOut;
+                paramOut.radMax = SP_radMax;
+                paramOut.radMin = SP_radMin;
+                paramOut.radStep = SP_radStep;
+
+                paramOut.elevMax = SP_elevMax;
+                paramOut.elevMin = SP_elevMin;
+                paramOut.elevStep = SP_elevStep;
+
+                paramOut.azimStep = SP_azimStep;
+                return paramOut;
+            };
+
 
             //! online
             std_msgs::ColorRGBA VIS_colorFeasibleTraj;
@@ -70,6 +109,9 @@ namespace chasing_utils {
             std_msgs::ColorRGBA VIS_travAssociation;
             std_msgs::ColorRGBA VIS_travNonAssociation;
 
+            std_msgs::ColorRGBA VIS_SP_oscColor;
+            float VIS_SP_oscRadius;
+
         };
 
 
@@ -80,10 +122,10 @@ namespace chasing_utils {
          */
         class Library {
         protected:
+            bool libInitialized = false;
             LibraryParam param; //! includes paramteres for generation
             int index; //! name tag. optinal
             string getMyName() const {return "lib_" + to_string(index);};
-            PolynomialXYZ polyRef;  //! In case of skeleton-permutation, this is the base traj
             PolynomialXYZ *polyArr; //! Total candidate trajectory
             int nTraj; //! number of trajectory of polyArr
             TraverseGrid *traverseGridPtr;
@@ -91,12 +133,17 @@ namespace chasing_utils {
             vector<gridTrajPair> gridTrajPairSet; //! list of <(i,j,k), its trajectory list in association> s.t. association > 0
             vector<trajGridPair> trajGridPairSet; //! list of <traj, its cell list in association> s.t. association > 0
 
+            //! used for SP
+            observer::OSC* SP_oscPtr;
+            vector<observer::ObserverTagChain> getPermutationPolynomial(MatrixXd& coeffX, MatrixXd& coeffY, MatrixXd& coeffZ);
+
             //! build polyArr from strategy
             PointSet generateTrajectory();
             PointSet getInspectionPoints(const PolynomialXYZ& poly) const;
 
         public:
             Library(LibraryParam param, int index = 0 );
+            bool isInit() {return libInitialized;}
             int getNumTraj() const {return nTraj;}
             float getHorizon () const {return param.horizon;}
 

@@ -21,7 +21,24 @@ int main(int argc, char** argv){
     ros::Publisher pub = nh.advertise<visualization_msgs::MarkerArray>("lib_visualizations",1);
     ros::Publisher pubAssociation = nh.advertise<pcl::PointCloud<pcl::PointXYZI>>("lib_visualizations_association",1);
     lib::LibraryParam param(nh);
+
+    /**
+     * For SP method, we simply test with a straight x-line
+     */
+    if (param.strategy == lib::Strategy::SKELETON_PERMUTATION){
+        VectorXd px (2); px << 0.5 , 2.0; Polynomial polyX(px);
+        VectorXd py (1); py << 0.0; Polynomial polyY(py);
+        VectorXd pz (1); pz << 0.0; Polynomial polyZ(pz);
+        param.SP_polyRefPtr = new PolynomialXYZ(&polyX,&polyY,&polyZ);
+    }
+
     lib::Library library(param,0);
+
+    if (not library.isInit()){
+        ROS_ERROR("library initialization failed. Aborting");
+        abort();
+    }
+
     visualization_msgs::MarkerArray markers = library.getMarkerTotal("map");
     pcl::PointCloud<pcl::PointXYZI> points = library.getMarkerAssociation("map");
 
@@ -30,7 +47,6 @@ int main(int argc, char** argv){
         points.header.stamp = pcl_conversions::toPCL(ros::Time::now());
         pub.publish(markers);
         pubAssociation.publish(points);
-
         ros::Rate(30).sleep();
     }
 

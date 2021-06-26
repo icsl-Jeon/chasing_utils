@@ -1140,13 +1140,14 @@ namespace chasing_utils {
 
         assert(targets.points.size() != 0);
 
-        float xmin = numeric_limits<float>::max();
-        float ymin = numeric_limits<float>::max();
-        float zmin = numeric_limits<float>::max();
+        float xmin = 100000;
+        float ymin = 100000;
+        float zmin = 100000;
 
-        float xmax = -numeric_limits<float>::max();
-        float ymax = -numeric_limits<float>::max();
-        float zmax = -numeric_limits<float>::max();
+        float xmax = -100000;
+        float ymax = -100000;
+        float zmax = -100000;
+
         for(auto pnt :targets.points){
             xmin = min(pnt.x,xmin);
             ymin = min(pnt.y,ymin);
@@ -1154,7 +1155,10 @@ namespace chasing_utils {
             xmax = max(pnt.x,xmax);
             ymax = max(pnt.y,ymax);
             zmax = max(pnt.z,zmax);
+
         }
+
+
 
         origin.x = xmin - margin_xy;
         origin.y = ymin - margin_xy;
@@ -1180,7 +1184,6 @@ namespace chasing_utils {
         Ny = floor(param.ly/param.resolution);
         Nz = floor(param.lz/param.resolution);
         Nt = param.nTraj;
-
         data = new bool***[Nx];
         for (int x=0;x<Nx;x++){
             data[x] = new bool**[Ny];

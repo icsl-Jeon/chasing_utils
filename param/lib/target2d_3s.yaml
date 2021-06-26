@@ -2,6 +2,7 @@ is_load_mode: false
 verbose: true
 horizon: 3.0
 method: discrete_integrator # {discrete_integrator or skeleton_permutation}
+association: collision # {collision, occlusion} (not use occlusion when generating target prediction trajectory)
 lib_folder: "" # in load mode, this will be loaded and in write mode, lib will be written here
 traverse_grid:
   resolution: 0.2

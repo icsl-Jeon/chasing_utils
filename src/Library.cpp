@@ -22,6 +22,22 @@ LibraryParam::LibraryParam(const ros::NodeHandle &nhTarget) {
         strategy = Strategy::DISCRETE_ACCEL_INTEGRATOR;
     else if (method == "skeleton_permutation")
         strategy = Strategy::SKELETON_PERMUTATION;
+    else{
+        ROS_ERROR("Wrong method! choose btw {discrete_integrator,skeleton_permutation }");
+        abort();
+    }
+
+    string associationType;
+    nhTarget.getParam("association",associationType);
+    if ( associationType == "collision")
+        association = AssociationMethod::COLLISION;
+    else if (associationType == "occlusion")
+        association  = AssociationMethod::OCCLUSION;
+    else{
+        ROS_ERROR("Wrong association! choose btw {collision,occlusion}");
+        abort();
+    }
+
     nhTarget.getParam("lib_folder",libFolder);
 
     nhTarget.getParam("traverse_grid/resolution",TG_resolution);
@@ -43,6 +59,20 @@ LibraryParam::LibraryParam(const ros::NodeHandle &nhTarget) {
     nhTarget.getParam("discrete_integrator/accel/y/min",DI_accelYMin);
     nhTarget.getParam("discrete_integrator/accel/y/max",DI_accelYMax);
 
+    nhTarget.getParam("skeleton_permutation/weight_skeleton",SP_weightSampleDeviation);
+    nhTarget.getParam("skeleton_permutation/dt",SP_timeInterval);
+    nhTarget.getParam("skeleton_permutation/t0",SP_oscGenStartTime);
+    int polyorder;
+    nhTarget.getParam("skeleton_permutation/poly_order",polyorder); SP_polyOrder = polyorder;
+    nhTarget.getParam("skeleton_permutation/max_step",SP_maxTimeStep);
+    nhTarget.getParam("skeleton_permutation/azimuth/step",SP_azimStep);
+    nhTarget.getParam("skeleton_permutation/elevation/step",SP_elevStep);
+    float angDeg;
+    nhTarget.getParam("skeleton_permutation/elevation/min",angDeg); SP_elevMin = angDeg * M_PI / 180.0f;
+    nhTarget.getParam("skeleton_permutation/elevation/max",angDeg); SP_elevMax = angDeg * M_PI / 180.0f;
+    nhTarget.getParam("skeleton_permutation/radius/step",SP_radStep);
+    nhTarget.getParam("skeleton_permutation/radius/min",SP_radMin);
+    nhTarget.getParam("skeleton_permutation/radius/max",SP_radMax);
 
     nhTarget.getParam("visualization/draw_start_time",VIS_drawStartTime);
     nhTarget.getParam("visualization/ref_traj/r",VIS_colorRefTraj.r);
@@ -74,6 +104,65 @@ LibraryParam::LibraryParam(const ros::NodeHandle &nhTarget) {
     nhTarget.getParam("visualization/traverse_grid/non_association/g",VIS_travNonAssociation.g);
     nhTarget.getParam("visualization/traverse_grid/non_association/b",VIS_travNonAssociation.b);
     nhTarget.getParam("visualization/traverse_grid/non_association/a",VIS_travNonAssociation.a);
+}
+
+
+/**
+ * return all polynomial primitives tracking the pointchain
+ * @return (polyOrder + 1) x nPermutation Matrix whose column is polynomial coefficients
+ * + array of tag chain associated with each polynomial primitive
+ */
+
+vector<observer::ObserverTagChain> Library::getPermutationPolynomial(MatrixXd &coeffX, MatrixXd &coeffY,
+                                                                     MatrixXd &coeffZ) {
+
+    double *pointData[DIM];
+    vector<observer::ObserverTagChain> vecTagArray = SP_oscPtr->getPermutationPointChain(pointData[0], pointData[1], pointData[2]);
+
+    MatrixXd kktRHS[DIM];
+    int polyOrder = param.SP_polyOrder;
+    PolynomialHelper helper(polyOrder);
+    int camSizePerStep = SP_oscPtr->getCurCamSizePerStep();
+    int curChainSize = SP_oscPtr->getCurChainSize();
+    Traj baseChain = SP_oscPtr->getBaseChain();
+
+    int nTraj = pow(camSizePerStep,curChainSize);
+
+    for (auto & d : kktRHS){
+        d = MatrixXd(polyOrder+1,nTraj);
+    }
+
+    // ! Computing KKT condition to obtain polynomial family
+    MatrixXd kktMat = 2*helper.intDerSquared(2,param.horizon) / pow(param.horizon, 2*2-1);
+    for (uint m = 0 ; m < curChainSize ; m++ ){
+        double tn = baseChain.ts[m];
+        for(uint i = 0 ; i <polyOrder+1 ; i++)
+            for (uint j = 0; j <polyOrder+1 ; j++)
+                kktMat(i,j) += 2*param.SP_weightSampleDeviation*pow(tn,i)*pow(tn,j); // todo variation in weight
+    }
+
+
+    MatrixXd Tterm(polyOrder + 1,curChainSize);
+    for (int m = 0;m< curChainSize;m++)
+        Tterm.col(m) = helper.tVec(baseChain.ts[m], 0);
+
+    for (uint d = 0 ; d<DIM ;d++) {
+        MatrixXd pntMat =  Map<MatrixXd>(pointData[d],curChainSize,nTraj);
+        kktRHS[d] = 2 * param.SP_weightSampleDeviation * Tterm * pntMat;
+
+    }
+
+    // Update canddiate polynomials
+    coeffX = kktMat.llt().solve(kktRHS[0]);
+    coeffY = kktMat.llt().solve(kktRHS[1]);
+    coeffZ = kktMat.llt().solve(kktRHS[2]);
+
+//    MatrixXd kktMatInv = kktMat.inverse();
+//    coeffX = kktMatInv * kktRHS[0];
+//    coeffY = kktMatInv * kktRHS[1];
+//    coeffZ = kktMatInv * kktRHS[2];
+
+    return vecTagArray;
 
 }
 
@@ -84,7 +173,10 @@ LibraryParam::LibraryParam(const ros::NodeHandle &nhTarget) {
 PointSet Library::generateTrajectory() {
     PointSet includePts; float tSample = 0.2;
     VectorXd ts; ts.setLinSpaced(int(param.horizon/tSample),0,param.horizon);
-
+    /**
+     * MODE 1 : DI method: start from origin (x-forwarding),
+     * generate polynomials using constant acceleration model
+     */
     if (param.strategy == Strategy::DISCRETE_ACCEL_INTEGRATOR) {
         nTraj = param.DI_speedDisc * param.DI_accelXDisc * param.DI_accelYDisc;
         polyArr = new PolynomialXYZ[nTraj];
@@ -114,7 +206,6 @@ PointSet Library::generateTrajectory() {
         VectorXd coeffY(polyOrder + 1);
         VectorXd coeffZ(1); //! z-axis no acceleration
 
-
         int trajIdx= 0;
         for (int s = 0; s < nDiscSpeed; s++)
             for (int ax = 0; ax < nDiscAccelX; ax++)
@@ -132,6 +223,36 @@ PointSet Library::generateTrajectory() {
                     includePts.push_back(polyArr[trajIdx].evalPntSet(ts));
                     trajIdx++;
                 }
+
+    /**
+     *  MODE 2 : SP method
+     *  1) Spawn OSC around polyRefPtr and 2) generate polynomials the OS per step
+     */
+    }else if (param.strategy == Strategy::SKELETON_PERMUTATION){
+        if (param.SP_polyRefPtr == NULL){
+            ROS_ERROR("SP method was selected but no ref trajectory.");
+            abort();
+        }
+
+        Traj refTraj = param.SP_polyRefPtr->toTraj(0,param.horizon,15); // # of sample is just arbitrary
+        SP_oscPtr = new observer::OSC(observer::spawnOscAroundTraj(param.getObserverParam(),refTraj,
+                                     param.SP_oscGenStartTime, param.horizon,
+                                     param.SP_timeInterval,param.SP_maxTimeStep));
+
+        MatrixXd coeffPoly[DIM];
+        vector<observer::ObserverTagChain> tagChainArr =
+                getPermutationPolynomial(coeffPoly[0],coeffPoly[1],coeffPoly[2]);
+        nTraj = tagChainArr.size();
+        polyArr = new PolynomialXYZ[nTraj];
+
+        for (int trajIdx = 0; trajIdx < nTraj; trajIdx ++){
+            polyArr[trajIdx].px = Polynomial(coeffPoly[0].col(trajIdx));
+            polyArr[trajIdx].py = Polynomial(coeffPoly[1].col(trajIdx));
+            polyArr[trajIdx].pz = Polynomial(coeffPoly[2].col(trajIdx));
+            includePts.push_back(polyArr[trajIdx].evalPntSet(ts));
+        }
+    }else{
+        ROS_ERROR("Library Unknown method %d for the generation of library",param.strategy);
     }
 
     return includePts;
@@ -139,8 +260,8 @@ PointSet Library::generateTrajectory() {
 
 Library::Library(LibraryParam param, int index): index(index),param(param) {
 
-    if (param.polyRefPtr==NULL and param.strategy == Strategy::SKELETON_PERMUTATION){
-        cerr<< getMyName() << " skeleton permutation selected without ref trajectory" << endl;
+    if (param.SP_polyRefPtr == NULL and param.strategy == Strategy::SKELETON_PERMUTATION){
+        ROS_ERROR_STREAM( getMyName() << " skeleton permutation selected without ref trajectory");
         return;
     }
 
@@ -153,13 +274,14 @@ Library::Library(LibraryParam param, int index): index(index),param(param) {
      *  Construct traverseGrid
      */
     bool isValidField = false;
+    ROS_INFO("Generating TG: nTraj=%d / include-points=%d",nTraj,includePnts.size());
     BooleanGridParam gridParam(nTraj, param.TG_resolution, includePnts,
                                param.TG_padding, param.TG_padding,
                                numeric_limits<float>::lowest(),numeric_limits<float>::max(),
                                isValidField);
+
     traverseGridPtr = new TraverseGrid(gridParam);
     ind3 sizeGrid = traverseGridPtr->getMaxAxis();
-
 
     if (param.verbose){
         printf("Generated %s with (%d, %d, %d) grid and %d trajectory.\n",
@@ -171,7 +293,11 @@ Library::Library(LibraryParam param, int index): index(index),param(param) {
     file_name =param.libFolder+ "/"  + file_name;
     cout << "reading " << file_name << endl;
     Timer timer;
-    //! load traverse grid if isLoadMode
+
+    /**
+     * Determine association (traj,inspection points)
+     */
+    //! MODE 1 : load traverse grid if isLoadMode
     if (param.isLoadMode){
         cout << getMyName() << " is called in load mode.." << endl;
         FILE* pFile = fopen(file_name.c_str(),"r");
@@ -185,7 +311,6 @@ Library::Library(LibraryParam param, int index): index(index),param(param) {
         traverseGridPtr->setNumAssociation(*nAssociation);
         associationLinearInd = vector<int>(*nAssociation);
         fread(associationLinearInd.data(),sizeof(int),*nAssociation,pFile);
-
 
         //! The binary read indicates true cell in linear index
         for (int i = 0 ; i < *nAssociation; i++){
@@ -203,7 +328,7 @@ Library::Library(LibraryParam param, int index): index(index),param(param) {
 
         cout << "read complete in "<<  timer.stop() << " ms" << endl;
 
-    //! construct traverse by inspection points
+    //! MODE 2: construct association by inspection points and save binary
     }else {
         cout << getMyName() << " is called in write mode.." << endl;
         for (int i = 0; i < nTraj; i++) {
@@ -242,11 +367,13 @@ Library::Library(LibraryParam param, int index): index(index),param(param) {
             delete[] travIdxBuf;
         }
     }
+
+    libInitialized = true;
 }
 
 /**
- * For a polynomial, generate inspection points based (dx,dy (skeleton permutation strategy))
- * @param poly
+ * For a polynomial, generate inspection points based on association method
+ * @param poly for this polynomial, we determine the association points on the traverse grid
  * @return
  * @bug the last point might not be captured to inspection points
  */
@@ -259,13 +386,22 @@ PointSet Library::getInspectionPoints(const PolynomialXYZ &poly) const {
 
     while(t <= param.horizon){
         t += dt;
-        Point pnt =  poly.evalPnt(t);
+        Point pnt =  poly.evalPnt(t); // point on the trajectory
+
         if (pnt.distTo(lastKnot) >= param.TG_inspectionDx) {
-            inspectionPoints.push_back(pnt);
-            lastKnot = pnt;
-            inspectionPoints.push_back(lastKnot);
-            if (param.strategy== Strategy::SKELETON_PERMUTATION){
-                // TODO : bearing inspection
+            // self collision association
+            if (param.association == AssociationMethod::COLLISION) {
+                inspectionPoints.push_back(pnt);
+                lastKnot = pnt;
+                inspectionPoints.push_back(lastKnot);
+
+            // bearing occlusion association
+            } else if (param.association == AssociationMethod::OCCLUSION) {
+                Point pntOnRefTraj = param.SP_polyRefPtr->evalPnt(t);
+                LineSegment line(pnt,pntOnRefTraj);
+                inspectionPoints.push_back(line.samplePoints(param.TG_inspectionDy,false));
+            } else{
+                ROS_ERROR("Library: unknown association. choose either collision or occlusion ");
             }
         }
     }
@@ -319,7 +455,7 @@ visualization_msgs::MarkerArray Library::getMarkerCandidTraj(string frameId, con
             nKnot = *(++it); markerArray.markers.push_back(lineStrip);
 
         }else{ // clearing marker
-            markerArray.markers.push_back(getClearingMarker(frameId,ns,n));
+//            markerArray.markers.push_back(getClearingMarker(frameId,ns,n));
         }
     }
     return markerArray;
@@ -334,8 +470,8 @@ visualization_msgs::Marker Library::getMarkerRefTraj(string frameId) const {
         return visualization_msgs::Marker();
     }
     string ns = getMyName() + "/ref_traj";
-    auto traj = polyRef.toTraj(param.VIS_drawStartTime,param.horizon,0.1f);
-    return traj.getLineStrip(param.VIS_colorCandidTraj,param.VIS_widthCandidTraj,
+    auto traj = param.SP_polyRefPtr->toTraj(param.VIS_drawStartTime,param.horizon,0.1f);
+    return traj.getLineStrip(param.VIS_colorRefTraj,param.VIS_widthRefTraj,
                              frameId,ns,0); // candidate starts from 1
 
 }
@@ -350,8 +486,10 @@ visualization_msgs::Marker Library::getMarkerTraverseGrid(string frameId)  const
 
 visualization_msgs::MarkerArray Library::getMarkerTotal(string frameId) const  {
     visualization_msgs::MarkerArray markerArray  = getMarkerCandidTraj(frameId);
-    if (param.strategy == Strategy::SKELETON_PERMUTATION)
+    if (param.strategy == Strategy::SKELETON_PERMUTATION) {
+
         markerArray.markers.push_back(getMarkerRefTraj(frameId));
+    }
     markerArray.markers.push_back(getMarkerTraverseGrid(frameId));
     return markerArray;
 }

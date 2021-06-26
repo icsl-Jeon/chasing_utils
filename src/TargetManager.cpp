@@ -246,7 +246,7 @@ namespace chasing_utils{
 
         Pose curPose =  Pose(stampedTransform);
         Point location = curPose.getTranslation();
-        Point velocity = (location - curPose.getTranslation()) * (1.0/dt);
+        Point velocity = (location - targets[targetIdx].curPose.getTranslation()) * (1.0/dt);
         Point accel = (velocity - targets[targetIdx].curVelocity) * (1.0/dt);
         Observation observation = make_pair(t, location);
 

@@ -14,18 +14,18 @@ catkin_package(
         LIBRARIES chasing_utils
 )
 
-add_library(${PROJECT_NAME} src/Library.cpp src/Utils.cpp src/TargetManager.cpp)
+add_library(${PROJECT_NAME} src/Library.cpp src/Utils.cpp src/TargetManager.cpp src/Observer.cpp)
 
 include_directories(
         include
         ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(offline_library_generator exe/OfflineLibraryGenerator.cpp   src/Utils.cpp src/Library.cpp )
+add_executable(offline_library_generator exe/OfflineLibraryGenerator.cpp   src/Utils.cpp src/Library.cpp src/Observer.cpp )
 target_link_libraries(offline_library_generator   ${catkin_LIBRARIES})
 
 
-add_executable(prediction_node exe/Prediction.cpp  src/Utils.cpp src/Library.cpp src/TargetManager.cpp)
+add_executable(prediction_node exe/Prediction.cpp  src/Utils.cpp src/Library.cpp src/TargetManager.cpp src/Observer.cpp  )
 target_link_libraries(prediction_node   ${catkin_LIBRARIES})
 
 
