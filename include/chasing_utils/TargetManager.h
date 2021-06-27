@@ -76,6 +76,7 @@ namespace chasing_utils {
             ros::Time tLastPrediction = ros::Time(0.0);
         };
         struct PublisherSet{
+            ros::Publisher clearMarker;
             vector<ros::Publisher> observationRawQueueSet;
             vector<ros::Publisher> predictionSet;
             vector<ros::Publisher> curPredictionPointSet;

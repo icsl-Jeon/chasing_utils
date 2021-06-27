@@ -36,7 +36,7 @@ window_bound: {
                      z: -3
               }
 }
-safe_margin: 0.3
+safe_margin: 0.5
 height_map: false
 color: {
          r: 0.9,

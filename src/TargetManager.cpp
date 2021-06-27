@@ -48,8 +48,10 @@ namespace chasing_utils{
     visualization_msgs::MarkerArray Target::visualizeFeasibleSet() const {
         visualization_msgs::MarkerArray markerArray = feasiblePredictionMarker;
         ros::Time t = ros::Time::now();
-        for(auto& marker: markerArray.markers)
+        for(auto& marker: markerArray.markers) {
             marker.header.stamp = t;
+            marker.lifetime = ros::Duration(0.05);
+        }
         return markerArray;
     }
 
@@ -64,7 +66,7 @@ namespace chasing_utils{
         nhTarget.getParam("observation/queue_size",observationQueueSize);
         nhTarget.getParam("observation/queue_min",nMinObservationForPrediction);
 
-        nhTarget.getParam("prediction/collision_margin",predictionRiskTol);
+        nhTarget.getParam("prediction/collision_margin",predictionCollisionMargin);
         nhTarget.getParam("prediction/weight_shape_change",weightOnShapeChange);
         nhTarget.getParam("prediction/tol/accum_error",accumErrorTol);
         nhTarget.getParam("prediction/tol/age",predictionAgeTol);
@@ -132,6 +134,7 @@ namespace chasing_utils{
             target.myIndex = n;
             target.libraryPtr = new lib::LibraryOnline(libParam,0); // 0 does not matther
             targets.push_back(target);
+//            pubSet.clearMarker = nh.advertise<visualization_msgs::Marker>(topicPrefix + "/clearing_marker",1);
             pubSet.observationRawQueueSet.push_back(
                     nh.advertise<pcl::PointCloud<pcl::PointXYZI>>(topicPrefix + "/observation_keyframe",1));
             pubSet.predictionSet.push_back(
@@ -298,6 +301,7 @@ namespace chasing_utils{
                 targets[n].libraryPtr->registerFeasibility(testingParam,feasibleIndex);
                 if (feasibleIndex.empty()) {
                     ROS_ERROR("no feasible prediction for target %d. Aborting prediction", n);
+                    mutex_.unlock();
                     return false;
                 }
             } else // do not check feasibility
@@ -366,6 +370,7 @@ namespace chasing_utils{
             targets[n].curPrediction = PredictionOutput(targets[n].tLastUpdate,predictionTraj);
             targets[n].feasiblePredictionMarker =
                     targets[n].libraryPtr->getMarkerFeasibleTraj(targets[n].getLibRefFrameName());
+//            ROS_INFO("feasible marker size= %d", targets[n].feasiblePredictionMarker.markers.size() );
             state.predictionAccumErrors[n] = 0.0;
             state.tLastPrediction = predictionStartTime;
             targets[n].isPredicted = true;

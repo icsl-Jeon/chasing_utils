@@ -8,11 +8,11 @@
     launch generates offline library by reading binary file
     After finishing the generation, visualization of library whose index is in the watch list will be published
     -->
-<!--    <arg name="library_name" default="target2d_2s"/>-->
-    <arg name="library_name" default="chaser_collision_2s"/>
-    <arg name="is_load_mode" default="false"/>
-    <arg name="lib_folder" default="$(find chasing_utils)/library"/>
-<!--    <arg name="lib_folder" value ="$(find auto_chaser4)/library/$(arg library_name)"/>-->
+    <arg name="library_name" default="target2d_2s"/>
+<!--    <arg name="library_name" default="chaser_collision_2s"/>-->
+    <arg name="is_load_mode" default="true"/>
+<!--    <arg name="lib_folder" default="$(find chasing_utils)/library"/>-->
+    <arg name="lib_folder" value ="$(find auto_chaser4)/library/$(arg library_name)"/>
 
 
     <node name = "library_manager" pkg = "chasing_utils" type="offline_library_generator" output="screen">
