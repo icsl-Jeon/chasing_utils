@@ -156,6 +156,7 @@ namespace chasing_utils {
             visualization_msgs::Marker getMarkerTraverseGrid(string frameId) const;
             visualization_msgs::MarkerArray getMarkerTotal(string frameId) const;
             pcl::PointCloud<pcl::PointXYZI> getMarkerAssociation(string frameId) const {return traverseGridPtr->visualizeAll( frameId);};
+            pcl::PointCloud<pcl::PointXYZI> getOscPoints(string frameId) const {auto points = SP_oscPtr->getTimeColoredPoints(); points.header.frame_id = frameId; return points;}
 
             PolynomialXYZ* getPolyPtrAt(int trajIdx) const {return &polyArr[trajIdx];}
             Traj getPolyTrajAt(int trajIdx,float drawStartTime = 0.0) const {return polyArr[trajIdx].toTraj(drawStartTime,param.horizon,0.03f);}

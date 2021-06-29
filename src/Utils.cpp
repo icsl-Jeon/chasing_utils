@@ -1737,6 +1737,10 @@ int chasing_utils::sign(float x){
 }
 
 float chasing_utils::bearingAngle(PointSet targets,Point observer){
+    if (targets.size() == 1){
+        return 0;
+    }
+
     // simple
     int M = targets.size();
     float angMax = -std::numeric_limits<float>::max();

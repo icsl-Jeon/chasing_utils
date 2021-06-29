@@ -15,8 +15,8 @@ offline:
 skeleton_permutation:
   weight_skeleton: 10.0 # weight for skeleton tracking
   dt: 0.3 # time interval to spawn observer set
-  t0: 0.2 # start time to place knots
-  poly_order: 5 # polynomial order of primitive to track given observers
+  t0: 0.3 # start time to place knots
+  poly_order: 6 # polynomial order of primitive to track given observers
   max_step: 4 # maximum number of time steps of OSC
   azimuth:
     step: 6

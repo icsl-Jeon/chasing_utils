@@ -21,6 +21,11 @@ int main(int argc, char** argv){
     ros::Publisher pub = nh.advertise<visualization_msgs::MarkerArray>("lib_visualizations",1);
     ros::Publisher pubAssociation = nh.advertise<pcl::PointCloud<pcl::PointXYZI>>("lib_visualizations_association",1);
     lib::LibraryParam param(nh);
+    ros::Publisher* pubOscPtr; // in case of SP, we publish OSC points
+    if (param.strategy == lib::Strategy::SKELETON_PERMUTATION){
+        pubOscPtr = new ros::Publisher(nh.advertise<pcl::PointCloud<pcl::PointXYZI>>("osc",1));
+    }
+
 
     /**
      * For SP method, we simply test with a straight x-line
@@ -41,12 +46,21 @@ int main(int argc, char** argv){
 
     visualization_msgs::MarkerArray markers = library.getMarkerTotal("map");
     pcl::PointCloud<pcl::PointXYZI> points = library.getMarkerAssociation("map");
+    pcl::PointCloud<pcl::PointXYZI> osc;
+    if (param.strategy == lib::Strategy::SKELETON_PERMUTATION)
+         osc = library.getOscPoints("map");
 
     while(ros::ok()){
         headerUpdate(markers);
         points.header.stamp = pcl_conversions::toPCL(ros::Time::now());
         pub.publish(markers);
         pubAssociation.publish(points);
+
+        if (param.strategy == lib::Strategy::SKELETON_PERMUTATION){
+            osc.header.stamp = pcl_conversions::toPCL(ros::Time::now());
+            pubOscPtr->publish(osc);
+        }
+
         ros::Rate(30).sleep();
     }
 

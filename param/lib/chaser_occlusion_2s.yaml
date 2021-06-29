@@ -12,25 +12,28 @@ offline:
   dx: 0.2 # inspection stride on forward [m]
   dy: 0.2 # inspection stride on lateral direction (only used in skeleton permutation) [m]
 
-discrete_integrator: # used only method is this
-  speed: # initial speed
-    n_disc: 20
-    min: 0.1
-    max: 1.5
-  accel:
-    x:
-      n_disc: 10
-      min: 0.0
-      max: 0.2
-    y:
-      n_disc: 7
-      min: -0.4
-      max: 0.4
+skeleton_permutation:
+  weight_skeleton: 10.0 # weight for skeleton tracking
+  dt: 0.3 # time interval to spawn observer set
+  t0: 0.3 # start time to place knots
+  poly_order: 6 # polynomial order of primitive to track given observers
+  max_step: 4 # maximum number of time steps of OSC
+  azimuth:
+    step: 6
+  elevation: # [deg]
+    step: 1
+    min: 30
+    max: 45
+  radius: # [m]
+    step: 2
+    min: 1.5
+    max: 2.0
 
 visualization:
   draw_start_time: 0.0 # better to set negative to select prediction library
-  ref_traj: {r: 0.0, g: 1.0, b: 1.0, a: 0.3, w: 0.03} # Will be available at skeleton permutation
-  candid_traj: {r: 0.0, g: 1.0, b: 1.0, a: 1.0, w: 0.01, dN: 3}
+  ref_traj: {r: 1.0, g: 0.0, b: 0.0, a: 1.0, w: 0.1} # Will be available at skeleton permutation
+  candid_traj: {r: 0.0, g: 1.0, b: 1.0, a: 1.0, w: 0.01, dN: 10}
   traverse_grid:
     association: {r: 1.0, g: 1.0, b: 1.0, a: 0.3}
     non_association: {r: 0.0, g: 0.0, b: 0.0, a: 0.3}
+

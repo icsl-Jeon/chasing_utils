@@ -3,10 +3,10 @@
     <include file="$(find zed2_client)/launch/client.launch">
         <arg name="is_bag" value="true"/>
 
-        <arg name="param_file" value="$(find zed2_client)/param/forest_single.yaml"/>
-        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/single_target/compressed/314_upper.bag"/>
+        <arg name="param_file" value="$(find zed2_client)/param/forest_dual.yaml"/>
+<!--        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/single_target/compressed/314_upper.bag"/>-->
 
-<!--        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/dual_target/compressed/dual_circling.bag"/>-->
+        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/dual_target/compressed/dual_circling.bag"/>
 <!--        <arg name="bag_file" value="/media/jbs/ssd/bag_zed/outdoor/dual_target/compressed/forest_budlegool.bag"/>-->
         <arg name="run_edt" value="false"/>
         <arg name="rviz" value="false"/>

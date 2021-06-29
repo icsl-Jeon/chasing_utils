@@ -352,6 +352,7 @@ Library::Library(LibraryParam param, int index): index(index),param(param) {
                             travIdxBuf[nTravCell++] = traverseGridPtr->sub2ind(ind4(ind,trajIdx));
                     }
         }
+        cout << "number of association: " << traverseGridPtr->getNumAssociation()<< endl;
         associationLinearInd = vector<int> (travIdxBuf,travIdxBuf+nTravCell);
 
         //! save to directory
@@ -487,7 +488,10 @@ visualization_msgs::Marker Library::getMarkerTraverseGrid(string frameId)  const
 visualization_msgs::MarkerArray Library::getMarkerTotal(string frameId) const  {
     visualization_msgs::MarkerArray markerArray  = getMarkerCandidTraj(frameId);
     if (param.strategy == Strategy::SKELETON_PERMUTATION) {
+        // osc points
 
+
+        // ref traj
         markerArray.markers.push_back(getMarkerRefTraj(frameId));
     }
     markerArray.markers.push_back(getMarkerTraverseGrid(frameId));
