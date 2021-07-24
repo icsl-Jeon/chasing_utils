@@ -4,7 +4,7 @@ observation:
   queue_size: 30 # max size of observation used for prediction
   queue_min: 3 # min number of observation for prediction
 prediction:
-  collision_margin: 0.5 # [m]. reject candidate prediction having distance value less than this
+  collision_margin: 0.6 # [m]. reject candidate prediction having distance value less than this
   weight_shape_change: 1.0 # [m]. importance weight on the shape change from previous prediction, over minimizing observation error
   tol: # tolerance to determine the need of new prediction.
     accum_error: 5.0 # [m x s] accumulated prediction error

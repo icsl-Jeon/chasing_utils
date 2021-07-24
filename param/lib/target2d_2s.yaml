@@ -30,8 +30,8 @@ discrete_integrator: # used only method is this
 visualization:
   draw_start_time: 0.0 # better to set negative to select prediction library
   ref_traj: {r: 0.0, g: 1.0, b: 1.0, a: 0.3, w: 0.03} # Will be available at skeleton permutation
-  candid_traj: {r: 0.0, g: 1.0, b: 1.0, a: 1.0, w: 0.01, dN: 10}
-  feasible_traj: {r: 0.0, g: 1.0, b: 1.0, a: 1.0, w: 0.01, dN: 10}
+  candid_traj: {r: 0.0, g: 0.0, b: 0.0, a: 1.0, w: 0.005, dN: 3}
+  feasible_traj: {r: 0.0, g: 0.0, b: 0.0, a: 1.0, w: 0.02, dN: 2}
   traverse_grid:
-    association: {r: 1.0, g: 1.0, b: 1.0, a: 0.3}
-    non_association: {r: 0.0, g: 0.0, b: 0.0, a: 0.3}
+    association: {r: 1.0, g: 1.0, b: 1.0, a: 0.2}
+    non_association: {r: 0.0, g: 0.0, b: 0.0, a: 0.1}

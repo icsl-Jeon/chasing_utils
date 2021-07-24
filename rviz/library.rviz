@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /Axes1
         - /Library1
         - /Library1/Namespaces1
       Splitter Ratio: 0.5186991691589355
@@ -28,7 +29,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: OSC
+    SyncSource: ""
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -39,16 +40,16 @@ Visualization Manager:
     - Alpha: 1
       Class: rviz/Axes
       Enabled: true
-      Length: 0.20000000298023224
+      Length: 0.5
       Name: Axes
-      Radius: 0.019999999552965164
+      Radius: 0.05000000074505806
       Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 0.5
       Cell Size: 1
       Class: rviz/Grid
       Color: 160; 160; 164
-      Enabled: true
+      Enabled: false
       Line Style:
         Line Width: 0.029999999329447746
         Value: Lines
@@ -61,14 +62,13 @@ Visualization Manager:
       Plane: XY
       Plane Cell Count: 10
       Reference Frame: <Fixed Frame>
-      Value: true
+      Value: false
     - Class: rviz/MarkerArray
       Enabled: true
       Marker Topic: /library_manager/library/lib_visualizations
       Name: Library
       Namespaces:
         lib_0/candid_traj: true
-        lib_0/ref_traj: true
         lib_0/traverse_grid: true
       Queue Size: 100
       Value: true
@@ -102,7 +102,7 @@ Visualization Manager:
       Value: true
   Enabled: true
   Global Options:
-    Background Color: 0; 0; 0
+    Background Color: 255; 255; 255
     Default Light: true
     Fixed Frame: map
     Frame Rate: 30
@@ -128,7 +128,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 11.223581314086914
+      Distance: 5.274125576019287
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -136,17 +136,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 1.7144898176193237
-        Y: -0.08142192661762238
-        Z: 0.03988029807806015
+        X: 1.7785683870315552
+        Y: -0.035518743097782135
+        Z: 0.03957117721438408
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.449796438217163
+      Pitch: 1.5697963237762451
       Target Frame: front_left_custom_optical
-      Yaw: 2.9754111766815186
+      Yaw: 3.130413293838501
     Saved: ~
 Window Geometry:
   Displays:
