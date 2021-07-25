@@ -1,49 +1,139 @@
-%% 1. READ map and the ground truth of the target 
-% Navigation Toolbox map format 
-mapOrig = load('factoryOctomap.mat').map;
-map = load('factoryOctomapInflate8.mat').map;
+%% Scenario generation (no need to run when data exists)
 
-xBound = [-190.6074 28.7521];
-yBound = [-145.1625 18.6637];
-zBound = [0 10];
+% load obstacle
+obstacleSet = load('map24\map.mat').obstacles;
 
-% For the original, do the below 
-inflateRad = 0.5;
-inflate(map,inflateRad)
+% target random generator 
+QvwSet = [linspace(0.1,1.0,10); ...
+                  linspace(10.0,15.0,10)]; % variance of motion 
+              
+q0 = [0 5 0]'; % x,y, th
+dt = 0.1; % integration
+v0 = 1; % reference velocity 
+w0 = pi/4'; % reference angle 
+obstColor = 0.7*[1 1 1];
+T = 50; % total horizon 
+N = T/dt+1; % step number 
+ts = linspace(0,T,N); 
 
-% Target movement (t,xq(t))
-bagFile = 'MultiTarget.bag';
-bag = rosbag(bagFile);
-target_topic = '/airsim_node/Woman_15_pose';
-bSel = select(bag,'Topic',target_topic);
-msgStructs = readMessages(bSel,'DataFormat','struct');
-xPoints = cellfun(@(m) double(m.Pose.Position.X),msgStructs)';
-yPoints = cellfun(@(m) double(m.Pose.Position.Y),msgStructs)';
-zPoints = cellfun(@(m) double(m.Pose.Position.Z),msgStructs)';
+for i = 1:length(QvwSet) % Only the final case 
+    
+    qSetX = {}; % points on the sampled traj. 
+    qSetY = {};
+    
+    Qv = QvwSet(1,i); % variance of velocity 
+    Qw = QvwSet(2,i); % variance of theta
 
-qxPoints = cellfun(@(m) double(m.Pose.Orientation.X),msgStructs)';
-qyPoints = cellfun(@(m) double(m.Pose.Orientation.Y),msgStructs)';
-qzPoints = cellfun(@(m) double(m.Pose.Orientation.Z),msgStructs)';
-qwPoints = cellfun(@(m) double(m.Pose.Orientation.Z),msgStructs)';
+    inputTraj = [normrnd(v0,Qv,1,N-1); normrnd(w0,Qw,1,N-1)]; 
+    
+    CovV = diag(Qv*ones(1,N-1)); % excluded the dist. of the first step 
+    CovW = diag(Qw*ones(1,N-1));
+    smoothing = 50; % For the smooth movement , we do smoothing on the randomized input trajectories
+    Nsample = 100; % # of trajs to be generated 
+    
+    % Draw ellipse (dynamic obstacle deprecated) 
+    figure(i)
+    clf
+    titleStr = sprintf('Qv = %f / Qw = %f ',Qv,Qw);
+    title(titleStr)
+    hold on
+    t_future = linspace(0,T,10);
+    for t = t_future        
+        for n = 1:length(obstacleSet)
+            rx = obstacleSet(n).c(1);
+            ry = obstacleSet(n).c(2);
+            R = eye(2);
+            u = obstacleSet(n).u;        
+            obstCenter = [polyval(rx,t),polyval(ry,t)];
+            draw_ellipse(R,u,obstCenter,obstColor,'k');        
+        end      
+    end
 
-translations = [xPoints ; yPoints; zPoints];
-orientations = [qxPoints; qyPoints; qzPoints; qwPoints];
-ts = cellfun(@(m) double(double(m.Header.Stamp.Sec) +double(m.Header.Stamp.Nsec)*1e-9),msgStructs);
-ts  = ts - ts(1);
+    % Sample a feasible target trajectories over [0,T]
+    nFeasible = 0;
+    while nFeasible < Nsample
+        isFeasible = true;
+        inputTraj = [smooth(mvnrnd(v0*ones(1,N-1),CovV),smoothing)' ; smooth(mvnrnd(w0*ones(1,N-1),CovW),smoothing)'];
+        q = q0;
+        qTraj = q;
+        for n = 1:N-1
+            xdot = inputTraj(1,n)*cos(inputTraj(2,n));
+            ydot = inputTraj(1,n)*sin(inputTraj(2,n));
+            thdot = inputTraj(2,n);
+            q = q + [xdot ydot thdot]'*dt;
+            qTraj = [qTraj q];
+            
+            xy = q(1:2);
+            % boundary check 
+            if xy(1) < 0 || xy(2) < 0 || xy(1) > 45 || xy(2) > 45
+               isFeasible = false;
+               break; 
+            end
+                        
+            % Collision check 
+            for nr = 1:length(obstacleSet)
+                obstacle = obstacleSet(nr);
+                r = obstacle.c';
+                % Compute ellipsoid (x-c)'A(x-c) = 1
+                S = diag((obstacle.u).^(-1))*(eye(2))';
+                A = S'*S;
+                if (r - xy)'*A*(r-xy) <= 1.5
+                    isFeasible = false;
+                    break
+                end            
+            end
 
+            if ~isFeasible 
+                break; % Subset of the trajs can be have immature length
+            end
+        end
 
-%% 1.1 Map - target movement overlay 
-figure(1)
-cla
-show(mapOrig)
-view([0 90])
-hold on 
-plot3 (xPoints,yPoints,zPoints,'k-')
+        if isFeasible
+            figure(i)
+            hold on
+            grayScale = 0.8;
+            h = plot(qTraj(1,:),qTraj(2,:),'k-','MarkerSize',1.5);
+            
+            % Collect 
+            nFeasible = nFeasible + 1; 
+            qSetX{nFeasible} = qTraj(1,:);
+            qSetY{nFeasible} = qTraj(2,:);
+            axis equal
+        end
+    end
+    qTrajSet{i}.ts = ts;
+    qTrajSet{i}.Xs = qSetX;
+    qTrajSet{i}.Ys = qSetY;
+end
 
-set(gca,'XLim',xBound)
-set(gca,'YLim',yBound)
+save('targetTrajSet','qTrajSet')
 
+%% 1. Load scenario and check scenraio  
+qTrajSet = load('targetTrajSet.mat').qTrajSet;
+obstacleSet = load('map24\map.mat').obstacles;
+obstColor = 0.7*[1 1 1];
 
+nScenario = length(qTrajSet);
+figure
+for n = 1:nScenario
+    subplot(1,10,n)    
+    hold on    
+    for m = 1:length(obstacleSet)
+        R = eye(2);
+        u = obstacleSet(m).u;        
+        draw_ellipse(R,u,obstacleSet(m).c,obstColor,'k');        
+    end       
+
+    trajStruct = qTrajSet(n);
+    trajStruct = trajStruct{1};
+    for m = 1:100
+       Xs = trajStruct.Xs{m}; 
+       Ys = trajStruct.Ys{m}; 
+       plot(Xs,Ys,'k-')
+    end
+    axis equal
+    axis([0 45 0 45])    
+end
 
 
 %% 2. Setting offline prediction library 
@@ -52,17 +142,20 @@ axMin = 0.0; axMax = 0.2; axN = 10; axSet = linspace(axMin,axMax,axN);
 ayMin = -0.4; ayMax = 0.4; ayN = 7; aySet = linspace(ayMin,ayMax,ayN);
 T = 2.0; tN = 10; tSet= linspace(0.0,T,tN);
 trajIdx = 1;
+coeffSet = {};
+trajSet = {};
 for v = vSet
     for ax = axSet
         for ay = aySet
             % drive 
-            traj = zeros(3, length(tSet));
+            traj = zeros(2, length(tSet));
             tIdx = 1; 
             for t = tSet
-                X = 0.5 * [ax ay 0.0]' * t^2 + [v 0 0 ]' * t;
+                X = 0.5 * [ax ay]' * t^2 + [v 0]' * t;
                 traj (:,tIdx) = X;
                 tIdx = tIdx + 1; 
             end
+            coeffSet{trajIdx} = [ax ay v];
             trajSet{trajIdx} = traj; 
             trajIdx = trajIdx + 1;
         end
@@ -75,14 +168,112 @@ cla
 hold on 
 for trajIdx = 1:length(trajSet)
     traj = trajSet{trajIdx};
-    plot3(traj(1,:),traj(2,:),traj(3,:),'k-')
+    plot(traj(1,:),traj(2,:),'k-')
 end
+axis equal
 
 %% 3. Evalute the prediction accuracy 
-nO = 10; nEval = 10; nStride = 5; 
-for tStep = nO: nStride :length(ts)-nEval
+
+% pick scenario and trajectory 
+scenarioIdx = 10; trajIdx = 1; 
+qTraj = qTrajSet{scenarioIdx};
+targetTraj = [qTraj.Xs{trajIdx} ; qTraj.Ys{trajIdx}]; % [ts ; xs ; ys]
+ts = qTraj.ts;
+
+% option 
+draw = true; 
+nStride = 5; % simulation time stride 
+
+% prediction paramter 
+no = 10; % number of observation 
+nEval = 10; % number future step for error evaluation 
+predictionCheckStride = 1; 
+
+% online prediction 
+for tStep = no + 1: nStride :length(ts)-nEval
+    % past observation 
+    positionObsrv = targetTraj(:,tStep - no : tStep-1); 
+    tCur = ts(tStep);
+    tObsrv = ts(tStep - no : tStep-1);
     
-   
+    % current pose of the target 
+    velocityDir = positionObsrv(:,end) - positionObsrv(:,end-1);
+    velocityDir = velocityDir / norm(velocityDir);  
+    velocityDirOrth = [-velocityDir(2); velocityDir(1)];
+    Rw0 = [velocityDir velocityDirOrth]; Tw0 = [[Rw0 positionObsrv(:,end)] ; [0 0 1]];
     
+    % predict 
+    trajSetTrans = {}; % only feasible 
+    trajInsertIdx = 1;     
+    for trajIdx = 1:length(trajSet)
+        traj = trajSet{trajIdx};
+        trajTrans = Tw0 * [traj ; ones(1, size(traj,2))];   
+        trajTrans = trajTrans(1:2,:); 
+        
+        % feasibility check 
+        isFeasible = true;
+        for s = 1:predictionCheckStride:length(trajTrans)
+            xy = trajTrans(:,s);
+            for nr = 1:length(obstacleSet)
+                obstacle = obstacleSet(nr);
+                r = obstacle.c';
+                % Compute ellipsoid (x-c)'A(x-c) = 1
+                S = diag((obstacle.u).^(-1))*(eye(2))';
+                A = S'*S;
+                if (r - xy)'*A*(r-xy) <= 1.5
+                    isFeasible = false;
+                    break
+                end            
+            end
+        end
+        if isFeasible            
+            trajSetTrans{trajInsertIdx} = trajTrans;
+            trajInsertIdx = trajInsertIdx + 1;
+            
+            % compute observation error 
+            obserErrorSum = 0; 
+            coeff = coeffSet{trajIdx}; 
+            ax = coeff(1); ay = coeff(2); v = coeff(3);
+            for nn = 1:no
+               tEval = tObsrv(nn) - tCur; 
+               qEval = 0.5 * [ax ay]' * tEval^2 + [v 0]' * tEval;
+               qObsrv = positionObsrv()
+
+                
+            end
+            
+        end               
+    end 
+    
+    
+    
+    % draw 
+    if draw
+        figure(1)
+        cla
+        hold on
+        % obstacle
+        for m = 1:length(obstacleSet)
+            R = eye(2);
+            u = obstacleSet(m).u;        
+            draw_ellipse(R,u,obstacleSet(m).c,obstColor,'k');        
+        end             
+        
+        % target trajectory 
+        plot(targetTraj(1,:),targetTraj(2,:),'k-')
+        
+        % offline library 
+        for trajIdx = 1:4:length(trajSetTrans)
+            trajTrans = trajSetTrans{trajIdx};
+            hLibrary = plot(trajTrans(1,:),trajTrans(2,:),'c-');
+        end     
+        axis equal 
+        axis ([0 45 0 45])        
+    end
+
+    
+    
+    
+    pause
 end
 
