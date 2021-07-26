@@ -1,4 +1,4 @@
-%% Scenario generation (no need to run when data exists)
+%% Scenario generation (do not run when data exists)
 
 % load obstacle
 obstacleSet = load('map24\map.mat').obstacles;
@@ -192,9 +192,12 @@ predictionCheckStride = 1;
 % online prediction 
 for tStep = no + 1: nStride :length(ts)-nEval
     % past observation 
-    positionObsrv = targetTraj(:,tStep - no : tStep-1); 
+    positionObsrv = targetTraj(:,tStep - no : tStep-1);     
     tCur = ts(tStep);
     tObsrv = ts(tStep - no : tStep-1);
+    
+    positionFuture = targetTraj(:,tStep: tStep + nEval); 
+    tFuture = ts(tStep: tStep + nEval);
     
     % current pose of the target 
     velocityDir = positionObsrv(:,end) - positionObsrv(:,end-1);
@@ -203,7 +206,8 @@ for tStep = no + 1: nStride :length(ts)-nEval
     Rw0 = [velocityDir velocityDirOrth]; Tw0 = [[Rw0 positionObsrv(:,end)] ; [0 0 1]];
     
     % predict 
-    trajSetTrans = {}; % only feasible 
+    trajSetTrans = {}; % includes only feasible 
+    obsrvErrorSet = []; % observation error of each traj in library  
     trajInsertIdx = 1;     
     for trajIdx = 1:length(trajSet)
         traj = trajSet{trajIdx};
@@ -226,26 +230,45 @@ for tStep = no + 1: nStride :length(ts)-nEval
                 end            
             end
         end
+        
         if isFeasible            
             trajSetTrans{trajInsertIdx} = trajTrans;
-            trajInsertIdx = trajInsertIdx + 1;
             
             % compute observation error 
-            obserErrorSum = 0; 
+            obsrvErrorSum = 0; 
             coeff = coeffSet{trajIdx}; 
             ax = coeff(1); ay = coeff(2); v = coeff(3);
             for nn = 1:no
                tEval = tObsrv(nn) - tCur; 
-               qEval = 0.5 * [ax ay]' * tEval^2 + [v 0]' * tEval;
-               qObsrv = positionObsrv()
-
-                
+               qEval = 0.5 * [ax ay]' * tEval^2 + [v 0]' * tEval; % polynomial evaluation w.r.t ref frame
+               qEval = Tw0 * [qEval ; 1]; qEval = qEval(1:2);
+               
+               qObsrv = positionObsrv(:,nn); % observation  
+               obsrvErrorSum = obsrvErrorSum  + norm(qEval - qObsrv);              
             end
-            
+            obsrvErrorSet(trajInsertIdx) = obsrvErrorSum;                      
+            trajInsertIdx = trajInsertIdx + 1;                        
         end               
-    end 
+    end     
+    [~,bestTrajIdx] = min (obsrvErrorSet);
     
-    
+    % prediction error   
+    predictionErrorSum = 0; 
+    coeff = coeffSet{bestTrajIdx}; 
+    ax = coeff(1); ay = coeff(2); v = coeff(3);    
+    figure(3)
+    cla
+    hold on 
+    for nn = 1:nEval
+       tEval = tFuture(nn) - tCur; 
+       qEval = 0.5 * [ax ay]' * tEval^2 + [v 0]' * tEval; % polynomial evaluation w.r.t ref frame
+       qEval = Tw0 * [qEval ; 1]; qEval = qEval(1:2);
+       qTrue = positionFuture(:,nn); % true future  
+       predictionErrorSum = obsrvErrorSum  + norm(qEval - qTrue); 
+       plot (qEval(1),qEval(2),'ro')
+       plot (qTrue(1),qTrue(2),'ko')       
+    end        
+    fprintf('prediction error sum = %f\n',predictionErrorSum)
     
     % draw 
     if draw
@@ -267,6 +290,11 @@ for tStep = no + 1: nStride :length(ts)-nEval
             trajTrans = trajSetTrans{trajIdx};
             hLibrary = plot(trajTrans(1,:),trajTrans(2,:),'c-');
         end     
+        
+        % final prediction 
+        predictionTraj = trajSetTrans{bestTrajIdx};
+        hPrediction = plot(predictionTraj(1,:),predictionTraj(2,:),'r-','LineWidth',2);
+        
         axis equal 
         axis ([0 45 0 45])        
     end
