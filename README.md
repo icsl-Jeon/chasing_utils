@@ -1,2 +1,2 @@
 # chasing_utils
-Include target predicotion and obstacle (todo) modules
+Include target prediction and obstacle (todo) modules
